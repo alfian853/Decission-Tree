@@ -2,8 +2,7 @@ import pandas as pd
 import numpy as np
 import math
 
-# return from -1 to n_row + 1
-def getIndexOfLowestGiniSplit(dataset,targetColumnIndex):
+def getGiniSplit(dataset,targetColumnIndex):
 
     rowCount = dataset.shape[0]
 
@@ -116,5 +115,5 @@ dataset.classCount = dataset[dataset.columns[dataset.columnCount - 1]].nunique()
 dataset.classList = dataset.iloc[:,dataset.columnCount-1].unique().tolist()
 #dataset.columnCount not setted because its dynamic row
 #dataset.columnCount = dataset.shape[0]
-res = getIndexOfLowestGiniSplit(dataset,2)
+res = getGiniSplit(dataset,2)
 print(res)
