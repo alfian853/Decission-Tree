@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 import math
-
+import json
 
 def getGiniSplit(dataset, targetColumnIndex, classList=[]):
     rowCount = dataset.shape[0]
@@ -130,6 +130,7 @@ class Node:
 
     # numeric type node example : {'lowEqual' : nodeLeft, 'greater' : nodeRight}
     # class type node example : {'x' : nodeX, 'y' : nodeY}
+    # childNodes = None
     childNodes = None
 
     # used for numeric split
@@ -217,13 +218,13 @@ def createDecissionTree(dataset, classList=[]):
         dataSplit[0] = splitTarget['index-split-data'][0]
         dataSplit[1] = splitTarget['index-split-data'][1]
         node.setSplitterValue(splitTarget['split-value'])
-        # print('len check',dataSplit[0].shape[0],dataSplit[1].shape[0])
-        # print('split 1',splitTarget['split-value'])
-        # print(dataSplit[0])
-        # print(splitTarget['gini-index']['lowEqual'])
-        # print('split 2',splitTarget['split-value'])
-        # print(dataSplit[1])
-        # print(splitTarget['gini-index']['greater'])
+        print('len check',dataSplit[0].shape[0],dataSplit[1].shape[0])
+        print('split 1',splitTarget['split-value'])
+        print(dataSplit[0])
+        print(splitTarget['gini-index']['lowEqual'])
+        print('split 2',splitTarget['split-value'])
+        print(dataSplit[1])
+        print(splitTarget['gini-index']['greater'])
 
         if splitTarget['gini-index']['lowEqual'] - 0.005 < 0:
             # print('x add leaf :' + dataSplit[0].iloc[0, dataSplit[0].shape[1] - 1])
@@ -279,23 +280,48 @@ pd.set_option('display.max_rows', 200)
 
 # dataset = pd.read_csv('tes')
 dataset = pd.read_csv('iris-dataset')
-# dataset = pd.read_csv('survey-dataset')
-
+#dataset = pd.read_csv('survey-dataset')
 dataset = pd.DataFrame(dataset)
+
 columnCount = dataset.shape[1]
 classCount = dataset[dataset.columns[columnCount - 1]].nunique()
 classList = dataset.iloc[:, columnCount - 1].unique().tolist()
 
+dataset = dataset.reindex(np.random.permutation(dataset.shape[0]))
+train_set = dataset.iloc[0:100]
+validation_set = dataset.iloc[100:]
 
-tree = createDecissionTree(dataset.copy(), classList)
+#print(validation_set.shape)
+
+
+# tree = createDecissionTree(dataset.copy(), classList)
+tree = createDecissionTree(train_set.copy(), classList)
 tree.setName('root')
-error = 0
-for i in range(dataset.shape[0]):
-    # print(dataset.iloc[i])
-    res = predict(tree, dataset.iloc[i])
-    if res != dataset.iloc[i][columnCount - 1]:
-        error += 1
-        print(res,'vs',dataset.iloc[i][columnCount-1])
-        # input()
+# error = 0
+# for i in range(validation_set.shape[0]):
+#     # print(dataset.iloc[i])
+#     res = predict(tree, validation_set.iloc[i])
+#     if res != validation_set.iloc[i][columnCount - 1]:
+#         error += 1
+#         print(res,'vs',validation_set.iloc[i][columnCount-1])
+#         #input()
+# #
+# print(error / validation_set.shape[0])
 
-print(error / dataset.shape[0])
+def iter(node):
+    if node.__dict__['nodeType'] == 'leaf':
+        return node.__dict__
+    a = node.__dict__
+    #print(a)
+    data = {}
+    copies = node.__dict__['childNodes']
+    node.__dict__['childNodes'] = dict()
+    for key in zip(copies):
+        node.__dict__['childNodes'][key] = iter(copies[key[0]])
+
+    return node.__dict__
+
+    # print(iter(a['childNodes']['lowEqual']))
+    # print(iter(a['childNodes']['greater']))
+
+print(iter(tree))
