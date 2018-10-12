@@ -1,133 +1,14 @@
+import time
+
 import pandas as pd
 import numpy as np
 import math
 import json
 
-def getGiniSplit(dataset, targetColumnIndex, classList=[]):
-    rowCount = dataset.shape[0]
-
-    # return value
-    # result.type : {numeric-split,class-split}
-    # numeric split using binary split
-    # class split using multiway split
-    result = {}
-    result['type'] = None
-    result['gini-split'] = None
-    # split for numeric data
-    result['index-split'] = None
-    result['index-split-data'] = []
-    result['gini-index'] = {}
-
-    columnCount = dataset.shape[1]
-
-    if isinstance(dataset.iloc[0, targetColumnIndex], str):
-        result['type'] = 'class-split'
-        uniqueValue = {}
-        uniqueSubsetSum = {}
-        for i, data in enumerate(dataset.iloc[:, targetColumnIndex]):
-            resultClass = dataset.iloc[i, columnCount - 1]
-            if uniqueValue.get(data) is None:
-                uniqueValue[data] = {resultClass: 0}
-                uniqueSubsetSum[data] = 0
-            elif uniqueValue.get(data).get(resultClass) is None:
-                uniqueValue[data][resultClass] = 0
-            uniqueValue[data][resultClass] += 1
-            uniqueSubsetSum[data] += 1
-
-        # print(uniqueValue)
-        # print(uniqueSubsetSum)
-
-        giniSplit = 0
-        for values in uniqueValue:
-            tempGiniSpit = 1
-            for value in uniqueValue[values]:
-                tempGiniSpit -= (uniqueValue[values][value] / uniqueSubsetSum[values]) ** 2
-            result['gini-index'][values] = tempGiniSpit
-            # print(values + " = " + str(tempGiniSpit))
-            giniSplit += (uniqueSubsetSum[values] / rowCount) * tempGiniSpit
-        # #
-
-        result['gini-split'] = giniSplit
-
-    else:
-        result['type'] = 'numeric-split'
-        dataset.sort_values(by=dataset.columns[targetColumnIndex], inplace=True)
-        prefixSum = [[0 for i in range(len(classList))] for j in range(dataset.shape[0] + 1)]
-
-        # prefixsum
-        for j, dataClass in enumerate(classList):
-            if dataset.iloc[0, columnCount - 1] == dataClass:
-                prefixSum[1][j] += 1
-                break
-
-        for i, data in enumerate(dataset.iloc[1:, columnCount - 1], start=1):
-            i += 1
-            for j, dataClass in enumerate(classList):
-                if data == dataClass:
-                    prefixSum[i][j] += 1
-                prefixSum[i][j] += prefixSum[i - 1][j]
-
-        giniSplit = 1
-        giniSplitIndex = rowCount-1
-        for i in range(rowCount + 1):
-            # skip row with the same value with next row
-            if i < rowCount-1:
-                if (abs(dataset.iloc[i,targetColumnIndex] - dataset.iloc[i-1,targetColumnIndex]) ) < 0.00001:
-                    continue
-
-            # le : lower equal
-            leRowSum = float(sum(prefixSum[i]))
-            # g : greater
-            gRowSum = rowCount - leRowSum
-
-            # count '<=' and '>'
-            leGiniIndex = 1
-            gGiniIndex = 1
-            for j in range(len(classList)):
-                if leRowSum > 0:
-                    leGiniIndex -= (prefixSum[i][j] / leRowSum) ** 2
-                if gRowSum > 0:
-                    greaterIJCount = prefixSum[len(prefixSum) - 1][j] - prefixSum[i][j]
-                    gGiniIndex -= (greaterIJCount / gRowSum) ** 2
-
-            tempGiniSpit = ((leRowSum / rowCount) * leGiniIndex) + ((gRowSum / rowCount) * gGiniIndex)
-            if tempGiniSpit < giniSplit:
-                giniSplit = tempGiniSpit
-                giniSplitIndex = i - 1
-                result['gini-index']['lowEqual'] = leGiniIndex
-                result['gini-index']['greater'] = gGiniIndex
-
-
-        # endfor
-
-        # print('c', giniSplit)
-        # print(giniSplitIndex)
-        # print(dataset.iloc[[giniSplitIndex]])
-
-        result['gini-split'] = giniSplit
-        result['index-split'] = giniSplitIndex
-        if giniSplitIndex<rowCount-1:
-            result['split-value'] = sum(dataset.iloc[giniSplitIndex:giniSplitIndex+2, targetColumnIndex])/2
-        else:
-            result['split-value'] = dataset.iloc[giniSplitIndex, targetColumnIndex] + 0.00001
-        # frame1 = pd.DataFrame(dataset.iloc[:giniSplitIndex + 1].copy(), columns=dataset.columns)
-        # frame1.append(,columns=dataset.columns)
-        # frame1.set
-        result['index-split-data'] = [
-            pd.DataFrame(dataset.iloc[:giniSplitIndex + 1].copy(), columns=dataset.columns),
-            pd.DataFrame(dataset.iloc[giniSplitIndex+1:].copy(), columns=dataset.columns)
-        ]
-        # print('return ')
-        # print(frame1)
-    # end-else
-
-    return result
-
 
 class Node:
     # nodeType : {'numeric-split','class-split','leaf'}
     nodeType = None
-
     # numeric type node example : {'lowEqual' : nodeLeft, 'greater' : nodeRight}
     # class type node example : {'x' : nodeX, 'y' : nodeY}
     # childNodes = None
@@ -146,7 +27,7 @@ class Node:
     # column name or compared column
     columnName = None
 
-    def __init__(self, nodeType):
+    def __init__(self, nodeType='root'):
         self.nodeType = nodeType
 
     def addChild(self, child, childName='[result]'):
@@ -168,160 +49,289 @@ class Node:
         self.columnName = columnName
 
 
-# class = unique count of result class
-# used for numeric data
-def createDecissionTree(dataset, classList=[]):
-    minGiniSplit = math.inf
-    splitTarget = None
-    columnCount = dataset.shape[1]
+class DTree:
+    rootNode = None
+    numLeaf = 0
+    numData = 0
+    dataColumns = []
+    dataTrainRowCount = 0
+    classList = []
 
-    for i in range(columnCount - 1):
-        result = getGiniSplit(dataset, i, classList)
-        # print('ginisplit of ' + dataset.columns[i] + ' = ' + str(result['gini-split']))
-        if result['gini-split'] < minGiniSplit:
-            splitTarget = result
-            splitTarget['column'] = i
-            minGiniSplit = result['gini-split']
+    def getGiniSplit(self, dataset, targetColumnIndex, classList):
+        rowCount = dataset.shape[0]
 
+        # return value
+        # result.type : {numeric-split,class-split}
+        # numeric split using binary split
+        # class split using multiway split
+        result = {}
+        result['type'] = None
+        result['gini-split'] = None
+        # split for numeric data
+        result['index-split'] = None
+        result['index-split-data'] = []
+        result['gini-index'] = {}
 
-    # print('chosen gini = ' + dataset.columns[splitTarget['column']])
-    splitTarget['column-name'] = dataset.columns[splitTarget['column']]
-    # ! Spliting data process
-    dataSplit = {}
-    node = Node(splitTarget['type'])
+        columnCount = dataset.shape[1]
 
-    if splitTarget['type'] == 'class-split':
-        poppedColumn = dataset.pop(splitTarget['column-name'])
-        for i, splitterClass in enumerate(poppedColumn):
+        if isinstance(dataset.iloc[0, targetColumnIndex], str):
+            result['type'] = 'class-split'
+            uniqueValue = {}
+            uniqueSubsetSum = {}
+            for i, data in enumerate(dataset.iloc[:, targetColumnIndex]):
+                resultClass = dataset.iloc[i, columnCount - 1]
+                if uniqueValue.get(data) is None:
+                    uniqueValue[data] = {resultClass: 0}
+                    uniqueSubsetSum[data] = 0
+                elif uniqueValue.get(data).get(resultClass) is None:
+                    uniqueValue[data][resultClass] = 0
+                uniqueValue[data][resultClass] += 1
+                uniqueSubsetSum[data] += 1
 
-            if dataSplit.get(splitterClass) is None:
-                dataSplit[splitterClass] = pd.DataFrame(columns=dataset.columns)
+            # print(uniqueValue)
+            # print(uniqueSubsetSum)
 
-            dataSplit[splitterClass] = dataSplit[splitterClass].append(dataset.iloc[i, :].copy())
-        # endfor
+            giniSplit = 0
+            for values in uniqueValue:
+                tempGiniSpit = 1
+                for value in uniqueValue[values]:
+                    tempGiniSpit -= (uniqueValue[values][value] / uniqueSubsetSum[values]) ** 2
+                result['gini-index'][values] = tempGiniSpit
+                # print(values + " = " + str(tempGiniSpit))
+                giniSplit += (uniqueSubsetSum[values] / rowCount) * tempGiniSpit
+            # #
+            result['gini-split'] = giniSplit
 
-        for childName in dataSplit:
-            # print('traverse from ' + splitTarget['column-name'] + " = " + childName)
-            if splitTarget['gini-index'][childName] - 0.005 < 0:
-                # print('x====result :' + dataSplit[childName].iloc[0, dataSplit[childName].shape[1] - 1])
+        else:
+            result['type'] = 'numeric-split'
+            dataset.sort_values(by=dataset.columns[targetColumnIndex], inplace=True)
+            prefixSum = [[0 for i in range(len(classList))] for j in range(dataset.shape[0] + 1)]
+
+            # prefixsum
+            for j, dataClass in enumerate(classList):
+                if dataset.iloc[0, columnCount - 1] == dataClass:
+                    prefixSum[1][j] += 1
+                    break
+
+            for i, data in enumerate(dataset.iloc[1:, columnCount - 1], start=1):
+                i += 1
+                for j, dataClass in enumerate(classList):
+                    if data == dataClass:
+                        prefixSum[i][j] += 1
+                    prefixSum[i][j] += prefixSum[i - 1][j]
+
+            giniSplit = math.inf
+            giniSplitIndex = rowCount - 1
+            for i in range(rowCount + 1):
+                # skip row with the same value with next row
+                if i < rowCount - 1:
+                    if (abs(dataset.iloc[i, targetColumnIndex] - dataset.iloc[i - 1, targetColumnIndex])) < 0.00001:
+                        continue
+
+                # le : lower equal
+                leRowSum = float(sum(prefixSum[i]))
+                # g : greater
+                gRowSum = rowCount - leRowSum
+
+                # count '<=' and '>'
+                leGiniIndex = 1
+                gGiniIndex = 1
+                for j in range(len(classList)):
+                    if leRowSum > 0:
+                        leGiniIndex -= (prefixSum[i][j] / leRowSum) ** 2
+                    if gRowSum > 0:
+                        greaterIJCount = prefixSum[len(prefixSum) - 1][j] - prefixSum[i][j]
+                        gGiniIndex -= (greaterIJCount / gRowSum) ** 2
+
+                tempGiniSpit = ((leRowSum / rowCount) * leGiniIndex) + ((gRowSum / rowCount) * gGiniIndex)
+                if tempGiniSpit < giniSplit:
+                    giniSplit = tempGiniSpit
+                    giniSplitIndex = i - 1
+                    result['gini-index']['lowEqual'] = leGiniIndex
+                    result['gini-index']['greater'] = gGiniIndex
+            # endfor
+
+            result['gini-split'] = giniSplit
+            result['index-split'] = giniSplitIndex
+            if giniSplitIndex < rowCount - 1:
+                result['split-value'] = sum(dataset.iloc[giniSplitIndex:giniSplitIndex + 2, targetColumnIndex]) / 2
+            else:
+                result['split-value'] = dataset.iloc[giniSplitIndex, targetColumnIndex] + 0.00001
+
+            result['index-split-data'] = [
+                pd.DataFrame(dataset.iloc[:giniSplitIndex + 1].copy(), columns=dataset.columns),
+                pd.DataFrame(dataset.iloc[giniSplitIndex + 1:].copy(), columns=dataset.columns)
+            ]
+        # end-else
+
+        return result
+
+    def createDecissionTree(self, dataset):
+        start_t = time.time()
+        self.dataColumns = dataset.columns.tolist()
+        self.dataTrainRowCount = dataset.shape[0]
+
+        columnCount = len(self.dataColumns)
+        self.classList = dataset.iloc[:, columnCount - 1].unique().tolist()
+        self.rootNode = self.__createDecissionTree__(dataset.copy())
+        self.rootNode.setName('root')
+        print('running time: ',time.time() - start_t,'second')
+
+    # private
+    def __createDecissionTree__(self, dataset):
+        minGiniSplit = math.inf
+        splitTarget = None
+        columnCount = dataset.shape[1]
+
+        for i in range(columnCount - 1):
+            result = self.getGiniSplit(dataset, i, self.classList)
+            # print('ginisplit of ' + dataset.columns[i] + ' = ' + str(result['gini-split']))
+            if result['gini-split'] < minGiniSplit:
+                splitTarget = result
+                splitTarget['column'] = i
+                minGiniSplit = result['gini-split']
+
+        # print('chosen gini = ' + dataset.columns[splitTarget['column']])
+        # print('chosen gini split val = ', splitTarget['gini-split'])
+        splitTarget['column-name'] = dataset.columns[splitTarget['column']]
+        # ! Spliting data process
+        node = Node(splitTarget['type'])
+        if splitTarget['type'] == 'class-split':
+            dataSplit = {}
+            categories = dataset[splitTarget['column-name']].unique().tolist()
+            for category in categories:
+                dataSplit[category] = dataset[dataset[splitTarget['column-name']] == category]
+                dataSplit[category].pop(splitTarget['column-name'])
+
+            for childName in categories:
+                # print('traverse from ' + splitTarget['column-name'] + " = " + childName)
+                if splitTarget['gini-index'][childName] - 0.005 < 0:
+                    childNode = Node('leaf')
+                    childNode.setLeafValue(dataSplit[childName].iloc[0, dataSplit[childName].shape[1] - 1])
+                    childNode.setName(splitTarget['column-name'] + " = " + childName)
+                    node.addChild(childNode, childName)
+                    self.numLeaf += dataSplit[childName].shape[0]
+                    print('leaf created : ', self.numLeaf, '/', self.dataTrainRowCount)
+                else:
+                    childNode = self.__createDecissionTree__(dataSplit[childName])
+                    childNode.setName(splitTarget['column-name'] + " = " + childName)
+                    node.addChild(childNode, childName)
+
+        # endif
+        elif splitTarget['type'] == 'numeric-split':
+            dataSplit = {}
+            dataSplit[0] = splitTarget['index-split-data'][0]
+            dataSplit[1] = splitTarget['index-split-data'][1]
+            node.setSplitterValue(splitTarget['split-value'])
+            # print('len check',dataSplit[0].shape[0],dataSplit[1].shape[0])
+            # print('split val',splitTarget['split-value'])
+            # print('split column',splitTarget['column-name'])
+            # print('split 1',splitTarget['split-value'])
+            # print(dataSplit[0])
+            # print('low equal',splitTarget['gini-index']['lowEqual'])
+            # print('split 2',splitTarget['split-value'])
+            # print(dataSplit[1])
+            # print('greater',splitTarget['gini-index']['greater'])
+
+            if splitTarget['gini-index']['lowEqual'] - 0.005 < 0:
+                # print('x add leaf :' + dataSplit[0].iloc[0, dataSplit[0].shape[1] - 1])
                 childNode = Node('leaf')
-                childNode.setLeafValue(dataSplit[childName].iloc[0, dataSplit[childName].shape[1] - 1])
-                childNode.setName(splitTarget['column-name'] + " = " + childName)
-                node.addChild(childNode, childName)
+                childNode.setLeafValue(dataSplit[0].iloc[0, dataSplit[0].shape[1] - 1])
+                node.addChild(childNode, 'lowEqual')
+                self.numLeaf += dataSplit[0].shape[0]
+                print('leaf created : ', self.numLeaf, '/', self.dataTrainRowCount)
+            elif dataSplit[0].shape[0] > 0:
+                childNode = self.__createDecissionTree__(dataSplit[0])
+                childNode.setName(splitTarget['column-name'] + ' <= ' + str(splitTarget['split-value']))
+                node.addChild(childNode, 'lowEqual')
+
+            if splitTarget['gini-index']['greater'] - 0.005 < 0:
+                # print('y add leaf :' + dataSplit[1].iloc[0, dataSplit[1].shape[1] - 1])
+                childNode = Node('leaf')
+                childNode.setLeafValue(dataSplit[1].iloc[0, dataSplit[1].shape[1] - 1])
+                node.addChild(childNode, 'greater')
+                self.numLeaf += dataSplit[1].shape[0]
+                print('leaf created : ', self.numLeaf, '/', self.dataTrainRowCount)
+            elif dataSplit[1].shape[0] > 0:
+                childNode = self.__createDecissionTree__(dataSplit[1])
+                childNode.setName(splitTarget['column-name'] + ' > ' + str(splitTarget['split-value']))
+                node.addChild(childNode, 'greater')
+
+        node.setColumnName(splitTarget['column-name'])
+        return node
+
+    def __validateDataColumn__(self, dataColumns):
+        return self.dataColumns == dataColumns
+
+    def predict(self,data):
+        if not self.__validateDataColumn__(data.index.tolist()):
+            raise Exception('dataset has different column from training dataset')
+        return self.__predict__(data)
+
+    # predict one row data
+    def __predict__(self, data):
+        node = self.rootNode
+        while node.columnName is not None:
+            res = data[node.columnName]
+
+            if isinstance(res, str):
+                node = node.childNodes[data[node.columnName]]
             else:
-                childNode = createDecissionTree(dataSplit[childName])
-                childNode.setName(splitTarget['column-name'] + " = " + childName)
-                node.addChild(childNode, childName)
+                if res <= node.splitterValue+0.000001:
+                    node = node.childNodes['lowEqual']
+                else:
+                    node = node.childNodes['greater']
 
-    # endif
-    elif splitTarget['type'] == 'numeric-split':
-        dataSplit[0] = splitTarget['index-split-data'][0]
-        dataSplit[1] = splitTarget['index-split-data'][1]
-        node.setSplitterValue(splitTarget['split-value'])
-        print('len check',dataSplit[0].shape[0],dataSplit[1].shape[0])
-        print('split 1',splitTarget['split-value'])
-        print(dataSplit[0])
-        print(splitTarget['gini-index']['lowEqual'])
-        print('split 2',splitTarget['split-value'])
-        print(dataSplit[1])
-        print(splitTarget['gini-index']['greater'])
+        return node.value
 
-        if splitTarget['gini-index']['lowEqual'] - 0.005 < 0:
-            # print('x add leaf :' + dataSplit[0].iloc[0, dataSplit[0].shape[1] - 1])
-            childNode = Node('leaf')
-            childNode.setLeafValue(dataSplit[0].iloc[0, dataSplit[0].shape[1] - 1])
-            node.addChild(childNode,'lowEqual')
-        else:
-            childNode = createDecissionTree(dataSplit[0], classList)
-            childNode.setName(splitTarget['column-name'] + ' <= ' + str(splitTarget['split-value']))
-            node.addChild(childNode, 'lowEqual')
+    def test(self, dataset):
+        if not self.__validateDataColumn__(dataset.columns.tolist()):
+            raise Exception('dataset has different column from training dataset')
+        error = 0
+        columnCount = dataset.shape[1]
+        for i in range(dataset.shape[0]):
+            # print(dataset.iloc[i])
+            res = self.__predict__(dataset.iloc[i])
+            if res != dataset.iloc[i][columnCount - 1]:
+                error += 1
 
-        if splitTarget['gini-index']['greater'] - 0.005 < 0:
-            # print('y add leaf :' + dataSplit[1].iloc[0, dataSplit[1].shape[1] - 1])
-            childNode = Node('leaf')
-            childNode.setLeafValue(dataSplit[1].iloc[0, dataSplit[1].shape[1] - 1])
-            node.addChild(childNode,'greater')
-        else:
-            childNode = createDecissionTree(dataSplit[1], classList)
-            childNode.setName(splitTarget['column-name'] + ' > ' + str(splitTarget['split-value']))
-            node.addChild(childNode,'greater')
-    # print(node.splitterValue)
-    # for child in node.childNodes:
-    #     print(child,node.childNodes[child].name,node.childNodes[child].columnName)
-    # input()
-    # ! End of Spliting data process
-
-    node.setColumnName(splitTarget['column-name'])
-    return node
-
-
-def predict(decissionTree, data):
-    node = decissionTree
-    while node.columnName is not None:
-        # print(node.name, node.columnName)
-        # print(data[node.columnName])
-        # print(node.nodeType)
-        res = data[node.columnName]
-        if isinstance(res, str):
-            node = node.childNodes[data[node.columnName]]
-        else:
-            if res <= node.splitterValue:
-                node = node.childNodes['lowEqual']
-            else:
-                node = node.childNodes['greater']
-        # input()
-    return node.value
+        print('Acuration :',100-(error / dataset.shape[0])*100,'%')
 
 
 # numeric dataset  = {'iris-dataset'}
 # class dataset  = {'survey-dataset'}
 pd.set_option('display.max_columns', 20)
-pd.set_option('display.max_rows', 200)
+pd.set_option('display.max_rows', 20)
+pd.set_option('expand_frame_repr', False)
 
 # dataset = pd.read_csv('tes')
-dataset = pd.read_csv('iris-dataset')
-#dataset = pd.read_csv('survey-dataset')
-dataset = pd.DataFrame(dataset)
+# dataset = pd.read_csv('iris-dataset')
+# dataset = pd.read_csv('survey-dataset')
+dataset = pd.read_csv('adult.data')
+# dataset = pd.DataFrame(dataset)
 
-columnCount = dataset.shape[1]
-classCount = dataset[dataset.columns[columnCount - 1]].nunique()
-classList = dataset.iloc[:, columnCount - 1].unique().tolist()
 
 dataset = dataset.reindex(np.random.permutation(dataset.shape[0]))
-train_set = dataset.iloc[0:100]
+train_set = dataset.iloc[0:1000]
 validation_set = dataset.iloc[100:]
-
-#print(validation_set.shape)
-
-
-# tree = createDecissionTree(dataset.copy(), classList)
-tree = createDecissionTree(train_set.copy(), classList)
-tree.setName('root')
-# error = 0
-# for i in range(validation_set.shape[0]):
-#     # print(dataset.iloc[i])
-#     res = predict(tree, validation_set.iloc[i])
-#     if res != validation_set.iloc[i][columnCount - 1]:
-#         error += 1
-#         print(res,'vs',validation_set.iloc[i][columnCount-1])
-#         #input()
-# #
-# print(error / validation_set.shape[0])
-
-def iter(node):
-    if node.__dict__['nodeType'] == 'leaf':
-        return node.__dict__
-    a = node.__dict__
-    data = {}
-    copies = node.__dict__['childNodes']
-    node.__dict__['childNodes'] = dict()
-    for key in zip(copies):
-        node.__dict__['childNodes'][key[0]] = iter(copies[key[0]])
-
-    return node.__dict__
-
-    # print(iter(a['childNodes']['lowEqual']))
-    # print(iter(a['childNodes']['greater']))
-
-tree_json = json.dumps(iter(tree))
-print(tree_json)
+tree = DTree()
+tree.createDecissionTree(dataset)
+tree.test(dataset)
+# print(tree.predict(dataset.iloc[0]))
+# def iter(node):
+#     if node.__dict__['nodeType'] == 'leaf':
+#         return node.__dict__
+#     a = node.__dict__
+#     data = {}
+#     copies = node.__dict__['childNodes']
+#     node.__dict__['childNodes'] = dict()
+#     for key in zip(copies):
+#         node.__dict__['childNodes'][key[0]] = iter(copies[key[0]])
+#
+#     return node.__dict__
+#
+#     # print(iter(a['childNodes']['lowEqual']))
+#     # print(iter(a['childNodes']['greater']))
+#
+# tree_json = json.dumps(iter(tree))
+# print(tree_json)
