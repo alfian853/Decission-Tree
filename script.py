@@ -318,20 +318,22 @@ tree = DTree()
 tree.createDecissionTree(dataset)
 tree.test(dataset)
 # print(tree.predict(dataset.iloc[0]))
-# def iter(node):
-#     if node.__dict__['nodeType'] == 'leaf':
-#         return node.__dict__
-#     a = node.__dict__
-#     data = {}
-#     copies = node.__dict__['childNodes']
-#     node.__dict__['childNodes'] = dict()
-#     for key in zip(copies):
-#         node.__dict__['childNodes'][key[0]] = iter(copies[key[0]])
-#
-#     return node.__dict__
-#
-#     # print(iter(a['childNodes']['lowEqual']))
-#     # print(iter(a['childNodes']['greater']))
-#
-# tree_json = json.dumps(iter(tree))
-# print(tree_json)
+def iter(node):
+    if node.__dict__['nodeType'] == 'leaf':
+        return node.__dict__
+    a = node.__dict__
+    data = {}
+    copies = node.__dict__['childNodes']
+    node.__dict__['childNodes'] = dict()
+    for key in zip(copies):
+        node.__dict__['childNodes'][key[0]] = iter(copies[key[0]])
+
+    return node.__dict__
+
+    print(iter(a['childNodes']['lowEqual']))
+    print(iter(a['childNodes']['greater']))
+
+tree_json = json.dumps(iter(tree.rootNode))
+f = open("decission_tree.json", "w")
+f.write(tree_json)
+f.close()
