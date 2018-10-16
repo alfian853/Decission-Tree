@@ -295,10 +295,18 @@ class DTree:
             if res != dataset.iloc[i][columnCount - 1]:
                 error += 1
 
-        print('Acuration :',100-(error / dataset.shape[0])*100,'%')
+        print('Accuracy :',100-(error / dataset.shape[0])*100,'%')
 
     def exportTree(self):
-        return self._exportTree(self.rootNode)
+        dtree = dict()
+        dtree['numLeaf'] = self.numLeaf
+        dtree['numData'] = self.numData
+        dtree['dataColumns'] = self.dataColumns
+        dtree['classList'] = self.classList
+        dtree['dataTrainRowCount'] = self.dataTrainRowCount
+        dtree['rootNode'] = self._exportTree(self.rootNode)
+
+        return dtree
 
     def _exportTree(self, node):
         if node.__dict__['nodeType'] == 'leaf':
@@ -308,16 +316,21 @@ class DTree:
         copies = node.__dict__['childNodes']
         node.__dict__['childNodes'] = dict()
         for key in zip(copies):
-            node.__dict__['childNodes'][key[0]] = iter(copies[key[0]])
+            node.__dict__['childNodes'][key[0]] = self._exportTree(copies[key[0]])
 
         return node.__dict__
 
     def importTree(self, tree_json):
         tree_dict = json.loads(tree_json)
 
+        self.numLeaf = tree_dict['numLeaf']
+        self.numData = tree_dict['numData']
+        self.dataColumns = tree_dict['dataColumns']
+        self.classList = tree_dict['classList']
+        self.dataTrainRowCount = tree_dict['dataTrainRowCount']
         self.rootNode = Node()
 
-        self.rootNode = self._importTree(self.rootNode, tree_dict)
+        self.rootNode = self._importTree(self.rootNode, tree_dict['rootNode'])
 
     def _importTree(self, node, tree_dict):
         if tree_dict['nodeType'] == 'leaf':
@@ -351,28 +364,30 @@ dataset = pd.read_csv('iris-dataset')
 # dataset = pd.DataFrame(dataset)
 
 
+# Shuffling dataset. Only use when data are sorted and not large
 dataset = dataset.reindex(np.random.permutation(dataset.shape[0]))
-train_set = dataset.iloc[0:75]
-validation_set = dataset.iloc[75:]
-tree = DTree()
-tree.createDecissionTree(train_set)
-#tree.test(validation_set)
-#print(tree.predict(validation_set.iloc[0]))
-#for (idx, row) in validation_set.iterrows():
-#    if row.iris_type != tree.predict(row):
-#        print(row.iris_type, '->', tree.predict(row))
 
+# Split dataset into two sets of data, training set and validation set
+split_percent = 0.6
+split_length = math.floor(dataset.shape[0]*split_percent)
+train_set = dataset.iloc[:split_length]
+validation_set = dataset.iloc[split_length:]
+
+# Build Dec Tree and test it
+#tree = DTree()
+#tree.createDecissionTree(train_set)
+#tree.test(validation_set)
+
+# Export built Dec Tree
 #tree_json = json.dumps(tree.exportTree())
-#print(tree.rootNode.__dict__)
-#print(tree_json)
 #f = open("decission_tree.json", "w")
 #f.write(tree_json)
 #f.close()
-#print('='*100)
-#tree.importTree(tree_json)
-#print(tree.rootNode.__dict__)
-#tree_json = json.dumps(tree.exportTree())
-#print(tree_json)
-#f = open("decission_tree_test.json", "w")
-#f.write(tree_json)
-#f.close()
+
+# Import Dec Tree from JSON file
+f = open("decission_tree.json", "r")
+tree_json = f.read()
+f.close()
+tree = DTree()
+tree.importTree(tree_json)
+tree.test(validation_set)
