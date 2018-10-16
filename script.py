@@ -297,6 +297,31 @@ class DTree:
 
         print('Acuration :',100-(error / dataset.shape[0])*100,'%')
 
+    def exportTree(self):
+        '''
+        if self.rootNode.__dict__['nodeType'] == 'leaf':
+            return self.rootNode.__dict__
+        a = self.rootNode.__dict__
+        data = {}
+        copies = self.rootNode.__dict__['childNodes']
+        self.rootNode.__dict__['childNodes'] = dict()
+        for key in zip(copies):
+            self.rootNode.__dict__['childNodes'][key[0]] = iter(copies[key[0]])
+        '''
+        return self._exportTree(self.rootNode)
+
+    def _exportTree(self, node):
+        if node.__dict__['nodeType'] == 'leaf':
+            return node.__dict__
+        a = node.__dict__
+        data = {}
+        copies = node.__dict__['childNodes']
+        node.__dict__['childNodes'] = dict()
+        for key in zip(copies):
+            node.__dict__['childNodes'][key[0]] = iter(copies[key[0]])
+
+        return node.__dict__
+
 
 # numeric dataset  = {'iris-dataset'}
 # class dataset  = {'survey-dataset'}
@@ -305,19 +330,21 @@ pd.set_option('display.max_rows', 20)
 pd.set_option('expand_frame_repr', False)
 
 # dataset = pd.read_csv('tes')
-# dataset = pd.read_csv('iris-dataset')
+dataset = pd.read_csv('iris-dataset')
 # dataset = pd.read_csv('survey-dataset')
-dataset = pd.read_csv('adult.data')
+# dataset = pd.read_csv('adult.data')
 # dataset = pd.DataFrame(dataset)
 
 
 dataset = dataset.reindex(np.random.permutation(dataset.shape[0]))
-train_set = dataset.iloc[0:1000]
-validation_set = dataset.iloc[100:]
+train_set = dataset.iloc[0:80]
+validation_set = dataset.iloc[80:]
 tree = DTree()
-tree.createDecissionTree(dataset)
-tree.test(dataset)
-# print(tree.predict(dataset.iloc[0]))
+tree.createDecissionTree(train_set)
+#tree.test(train_set)
+#print(tree.predict(validation_set.iloc[0]))
+for (idx, row) in validation_set.iterrows():
+    print(row.iris_type, '->', tree.predict(row))
 def iter(node):
     if node.__dict__['nodeType'] == 'leaf':
         return node.__dict__
@@ -333,7 +360,8 @@ def iter(node):
     print(iter(a['childNodes']['lowEqual']))
     print(iter(a['childNodes']['greater']))
 
-tree_json = json.dumps(iter(tree.rootNode))
+tree_json = json.dumps(tree.exportTree())
+#print(tree_json)
 f = open("decission_tree.json", "w")
 f.write(tree_json)
 f.close()
