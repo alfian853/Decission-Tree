@@ -320,10 +320,10 @@ class DTree:
         #self.rootNode.setColumn(tree_dict['columnName'])
         #self.rootNode.setSplitterValue(tree_dict['splitterValue'])
 
-        return self._importTree(self.rootNode, tree_dict)
+        self.rootNode = self._importTree(self.rootNode, tree_dict)
 
     def _importTree(self, node, tree_dict):
-        print(tree_dict['nodeType'])
+        #print(tree_dict['nodeType'])
         if tree_dict['nodeType'] == 'leaf':
             #node = Node('leaf')
             node.setLeafValue(tree_dict['value'])
@@ -334,14 +334,14 @@ class DTree:
         node.setColumnName(tree_dict['columnName'])
         node.setSplitterValue(tree_dict['splitterValue'])
 
-        print(node.__dict__)
+        #print(node.__dict__)
 
         for child in tree_dict['childNodes']:
             temp = Node(tree_dict['childNodes'][child]['nodeType'])
             node.addChild(temp, child)
-            self._importTree(temp, tree_dict['childNodes'][child])
+            temp = self._importTree(temp, tree_dict['childNodes'][child])
 
-        #return node
+        return node
 
 
 
@@ -399,10 +399,12 @@ def iter(node):
     print(iter(a['childNodes']['greater']))
 
 tree_json = json.dumps(tree.exportTree())
+print(tree.rootNode.__dict__)
 #print(tree_json)
 f = open("decission_tree.json", "w")
 f.write(tree_json)
 f.close()
+print('='*100)
 tree.importTree(tree_json)
 print(tree.rootNode.__dict__)
 #tree_json = json.dumps(tree.exportTree())
