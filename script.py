@@ -316,48 +316,25 @@ class DTree:
         tree_dict = json.loads(tree_json)
 
         self.rootNode = Node()
-        #self.rootNode.setName(tree_dict['name'])
-        #self.rootNode.setColumn(tree_dict['columnName'])
-        #self.rootNode.setSplitterValue(tree_dict['splitterValue'])
 
         self.rootNode = self._importTree(self.rootNode, tree_dict)
 
     def _importTree(self, node, tree_dict):
-        #print(tree_dict['nodeType'])
         if tree_dict['nodeType'] == 'leaf':
-            #node = Node('leaf')
             node.setLeafValue(tree_dict['value'])
-            return
+            return node
 
         node = Node(tree_dict['nodeType'])
         node.setName(tree_dict['name'])
         node.setColumnName(tree_dict['columnName'])
         node.setSplitterValue(tree_dict['splitterValue'])
 
-        #print(node.__dict__)
 
         for child in tree_dict['childNodes']:
-            temp = Node(tree_dict['childNodes'][child]['nodeType'])
+            temp = self._importTree(Node(tree_dict['childNodes'][child]['nodeType']), tree_dict['childNodes'][child])
             node.addChild(temp, child)
-            temp = self._importTree(temp, tree_dict['childNodes'][child])
 
         return node
-
-
-
-        '''
-        for key in tree_dict:
-            if key == 'childNodes':
-                for key_c in tree_dict['childNodes']:
-                    node['childNodes'][key_c] = self._importTree(
-                                                    node,
-                                                    tree_dict['childNodes'][key_c]
-                                                )
-                continue
-                node[key] = tree_dict[key]
-
-        return node
-        '''
 
 
 
@@ -375,38 +352,25 @@ dataset = pd.read_csv('iris-dataset')
 
 
 dataset = dataset.reindex(np.random.permutation(dataset.shape[0]))
-train_set = dataset.iloc[0:80]
-validation_set = dataset.iloc[80:]
+train_set = dataset.iloc[0:75]
+validation_set = dataset.iloc[75:]
 tree = DTree()
 tree.createDecissionTree(train_set)
-#tree.test(train_set)
+#tree.test(validation_set)
 #print(tree.predict(validation_set.iloc[0]))
-for (idx, row) in validation_set.iterrows():
-    print(row.iris_type, '->', tree.predict(row))
-def iter(node):
-    if node.__dict__['nodeType'] == 'leaf':
-        return node.__dict__
-    a = node.__dict__
-    data = {}
-    copies = node.__dict__['childNodes']
-    node.__dict__['childNodes'] = dict()
-    for key in zip(copies):
-        node.__dict__['childNodes'][key[0]] = iter(copies[key[0]])
+#for (idx, row) in validation_set.iterrows():
+#    if row.iris_type != tree.predict(row):
+#        print(row.iris_type, '->', tree.predict(row))
 
-    return node.__dict__
-
-    print(iter(a['childNodes']['lowEqual']))
-    print(iter(a['childNodes']['greater']))
-
-tree_json = json.dumps(tree.exportTree())
-print(tree.rootNode.__dict__)
+#tree_json = json.dumps(tree.exportTree())
+#print(tree.rootNode.__dict__)
 #print(tree_json)
-f = open("decission_tree.json", "w")
-f.write(tree_json)
-f.close()
-print('='*100)
-tree.importTree(tree_json)
-print(tree.rootNode.__dict__)
+#f = open("decission_tree.json", "w")
+#f.write(tree_json)
+#f.close()
+#print('='*100)
+#tree.importTree(tree_json)
+#print(tree.rootNode.__dict__)
 #tree_json = json.dumps(tree.exportTree())
 #print(tree_json)
 #f = open("decission_tree_test.json", "w")
