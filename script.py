@@ -298,16 +298,6 @@ class DTree:
         print('Acuration :',100-(error / dataset.shape[0])*100,'%')
 
     def exportTree(self):
-        '''
-        if self.rootNode.__dict__['nodeType'] == 'leaf':
-            return self.rootNode.__dict__
-        a = self.rootNode.__dict__
-        data = {}
-        copies = self.rootNode.__dict__['childNodes']
-        self.rootNode.__dict__['childNodes'] = dict()
-        for key in zip(copies):
-            self.rootNode.__dict__['childNodes'][key[0]] = iter(copies[key[0]])
-        '''
         return self._exportTree(self.rootNode)
 
     def _exportTree(self, node):
@@ -321,6 +311,54 @@ class DTree:
             node.__dict__['childNodes'][key[0]] = iter(copies[key[0]])
 
         return node.__dict__
+
+    def importTree(self, tree_json):
+        tree_dict = json.loads(tree_json)
+
+        self.rootNode = Node()
+        #self.rootNode.setName(tree_dict['name'])
+        #self.rootNode.setColumn(tree_dict['columnName'])
+        #self.rootNode.setSplitterValue(tree_dict['splitterValue'])
+
+        return self._importTree(self.rootNode, tree_dict)
+
+    def _importTree(self, node, tree_dict):
+        print(tree_dict['nodeType'])
+        if tree_dict['nodeType'] == 'leaf':
+            #node = Node('leaf')
+            node.setLeafValue(tree_dict['value'])
+            return
+
+        node = Node(tree_dict['nodeType'])
+        node.setName(tree_dict['name'])
+        node.setColumnName(tree_dict['columnName'])
+        node.setSplitterValue(tree_dict['splitterValue'])
+
+        print(node.__dict__)
+
+        for child in tree_dict['childNodes']:
+            temp = Node(tree_dict['childNodes'][child]['nodeType'])
+            node.addChild(temp, child)
+            self._importTree(temp, tree_dict['childNodes'][child])
+
+        #return node
+
+
+
+        '''
+        for key in tree_dict:
+            if key == 'childNodes':
+                for key_c in tree_dict['childNodes']:
+                    node['childNodes'][key_c] = self._importTree(
+                                                    node,
+                                                    tree_dict['childNodes'][key_c]
+                                                )
+                continue
+                node[key] = tree_dict[key]
+
+        return node
+        '''
+
 
 
 # numeric dataset  = {'iris-dataset'}
@@ -365,3 +403,10 @@ tree_json = json.dumps(tree.exportTree())
 f = open("decission_tree.json", "w")
 f.write(tree_json)
 f.close()
+tree.importTree(tree_json)
+print(tree.rootNode.__dict__)
+#tree_json = json.dumps(tree.exportTree())
+#print(tree_json)
+#f = open("decission_tree_test.json", "w")
+#f.write(tree_json)
+#f.close()
