@@ -297,6 +297,10 @@ class DTree:
 
         print('Accuracy :',100-(error / dataset.shape[0])*100,'%')
 
+    def default(self,o):
+        if isinstance(o, np.int64): return int(o)
+        return -1
+
     def exportTree(self):
         dtree = dict()
         dtree['numLeaf'] = self.numLeaf
@@ -310,6 +314,7 @@ class DTree:
 
     def _exportTree(self, node):
         if node.__dict__['nodeType'] == 'leaf':
+            node.__dict__['value'] = self.default(node.__dict__['value'])
             return node.__dict__
         a = node.__dict__
         data = {}
@@ -361,7 +366,8 @@ pd.set_option('expand_frame_repr', False)
 # dataset = pd.read_csv('tes')
 # dataset = pd.read_csv('iris-dataset')
 # dataset = pd.read_csv('survey-dataset')
-dataset = pd.read_csv('adult.data')
+dataset = pd.read_csv('data_banknote_authentication.csv')
+# dataset = pd.read_csv('')
 # # dataset = pd.DataFrame(dataset)
 dataset = pd.DataFrame(dataset)
 #
@@ -370,24 +376,26 @@ dataset = pd.DataFrame(dataset)
 dataset = dataset.reindex(np.random.permutation(dataset.shape[0]))
 #
 # # Split dataset into two sets of data, training set and validation set
-split_percent = 0
+split_percent = 0.7
 split_length = math.floor(dataset.shape[0]*split_percent)
 train_set = dataset.iloc[:split_length]
 validation_set = dataset.iloc[split_length:]
 #
 # # Build Dec Tree and test it
-tree = DTree()
-tree.createDecissionTree(train_set)
+# tree = DTree()
+# tree.createDecissionTree(train_set)
 # tree.test(validation_set)
 #
-# # Export built Dec Tree
-tree_json = json.dumps(tree.exportTree())
-f = open("decission_tree.json", "w")
-f.write(tree_json)
-f.close()
+# # # Export built Dec Tree
+# tree_json = json.dumps(tree.exportTree())
+# f = open("adult.json", "w")
+# f.write(tree_json)
+# f.close()
+# print(tree.rootNode.__dict__)
 
-# Import Dec Tree from JSON file
-f = open("adult_DTree.json", "r")
+#
+# # Import Dec Tree from JSON file
+f = open("banknote.json", "r")
 tree_json = f.read()
 f.close()
 tree = DTree()
