@@ -340,7 +340,8 @@ class DTree:
         node = Node(tree_dict['nodeType'])
         node.setName(tree_dict['name'])
         node.setColumnName(tree_dict['columnName'])
-        node.setSplitterValue(tree_dict['splitterValue'])
+        if(tree_dict.get('splitterValue')):
+            node.setSplitterValue(tree_dict['splitterValue'])
 
 
         for child in tree_dict['childNodes']:
@@ -358,34 +359,35 @@ pd.set_option('display.max_rows', 20)
 pd.set_option('expand_frame_repr', False)
 
 # dataset = pd.read_csv('tes')
-dataset = pd.read_csv('iris-dataset')
+# dataset = pd.read_csv('iris-dataset')
 # dataset = pd.read_csv('survey-dataset')
-# dataset = pd.read_csv('adult.data')
-# dataset = pd.DataFrame(dataset)
-
-
-# Shuffling dataset. Only use when data are sorted and not large
+dataset = pd.read_csv('adult.data')
+# # dataset = pd.DataFrame(dataset)
+dataset = pd.DataFrame(dataset)
+#
+#
+# # Shuffling dataset. Only use when data are sorted and not large
 dataset = dataset.reindex(np.random.permutation(dataset.shape[0]))
-
-# Split dataset into two sets of data, training set and validation set
-split_percent = 0.6
+#
+# # Split dataset into two sets of data, training set and validation set
+split_percent = 0
 split_length = math.floor(dataset.shape[0]*split_percent)
 train_set = dataset.iloc[:split_length]
 validation_set = dataset.iloc[split_length:]
-
-# Build Dec Tree and test it
-#tree = DTree()
-#tree.createDecissionTree(train_set)
-#tree.test(validation_set)
-
-# Export built Dec Tree
-#tree_json = json.dumps(tree.exportTree())
-#f = open("decission_tree.json", "w")
-#f.write(tree_json)
-#f.close()
+#
+# # Build Dec Tree and test it
+tree = DTree()
+tree.createDecissionTree(train_set)
+# tree.test(validation_set)
+#
+# # Export built Dec Tree
+tree_json = json.dumps(tree.exportTree())
+f = open("decission_tree.json", "w")
+f.write(tree_json)
+f.close()
 
 # Import Dec Tree from JSON file
-f = open("decission_tree.json", "r")
+f = open("adult_DTree.json", "r")
 tree_json = f.read()
 f.close()
 tree = DTree()
